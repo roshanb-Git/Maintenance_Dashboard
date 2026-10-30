@@ -1,0 +1,11 @@
+django
+psycopg[binary]
+python-dateutil
+reportlab
+openpyxl
+Pillow
+celery
+redis
+python-dotenv
+
+#pip freeze > requirements.txt

@@ -1,0 +1,48 @@
+
+from django.contrib import admin
+
+from .models import (
+    Site,
+    Equipment,
+    MaintenanceSchedule,
+    MaintenanceHistory,
+    MaintenanceAttachment,
+)
+
+
+@admin.register(Site)
+class SiteAdmin(admin.ModelAdmin):
+    list_display = ("code", "name", "location")
+    search_fields = ("code", "name")
+
+
+@admin.register(Equipment)
+class EquipmentAdmin(admin.ModelAdmin):
+    list_display = (
+        "equipment_id",
+        "name",
+        "equipment_type",
+        "site",
+        "active",
+    )
+
+    list_filter = ("site", "equipment_type", "active")
+    search_fields = ("equipment_id", "name")
+
+
+@admin.register(MaintenanceSchedule)
+class ScheduleAdmin(admin.ModelAdmin):
+    list_display = (
+        "equipment",
+        "task_type",
+        "interval_months",
+        "last_completed",
+        "next_due",
+        "status",
+    )
+
+    list_filter = ("task_type", "equipment__site")
+
+
+admin.site.register(MaintenanceHistory)
+admin.site.register(MaintenanceAttachment)

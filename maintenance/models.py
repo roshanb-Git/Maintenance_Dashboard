@@ -1,14 +1,28 @@
 
 from django.db import models
 from django.conf import settings
+from django.utils import timezone
 from dateutil.relativedelta import relativedelta
 from django.core.validators import MinValueValidator
+
+# Auto-generated service rules: equipment type -> (task type, interval in months)
+SERVICE_RULES = {
+    "DEG": ("DEG", 9),   # DEG service every 9 months
+    "AC":  ("AC", 3),    # AC service every 3 months
+    "BAT": ("BAT", 4),   # Battery test every 4 months
+}
 
 
 class Site(models.Model):
     name = models.CharField(max_length=150)
     code = models.CharField(max_length=30, unique=True)
     location = models.CharField(max_length=255, blank=True)
+
+    users = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        related_name="sites",
+        blank=True,
+    )
 
     def __str__(self):
         return self.name
@@ -50,6 +64,8 @@ class MaintenanceSchedule(models.Model):
     TASKS = [
         ("DEG", "DEG Service"),
         ("AC", "AC Service"),
+        ("DEG_Faul", "DEG Fault"),
+        ("AC_Faul", "AC Fault"),
         ("BAT", "Battery Test"),
     ]
 

@@ -42,6 +42,10 @@
             border-radius: 12px;
             box-shadow: 0 2px 8px #00000012;
         }
+
+        .table-hover {
+            --bs-table-hover-bg: #dbe7ff;
+        }
     </style>
 
 </head>
@@ -55,39 +59,37 @@
         <nav class="col-md-2 sidebar p-3">
 
             <h5>Maintenance Manager</h5>
+            <small class="text-white-50">{{ user.get_username }}</small>
 
             <hr>
 
-            <a href="/">Dashboard</a>
-            <a href="/admin/maintenance/site/">Sites</a>
-            <a href="/admin/maintenance/equipment/">Equipment</a>
-            <a href="/admin/maintenance/maintenanceschedule/">
-                Maintenance
-            </a>
+            <a href="{% url 'dashboard' %}">Dashboard</a>
+            <a href="{% url 'todo' %}">To do List</a>
+            <a href="{% url 'equipment' %}">Equipment</a>
+            <a href="{% url 'reports' %}">Reports</a>
 
-            <a href="/admin/maintenance/maintenancehistory/">
-                History
-            </a>
 
-            <a href="/reports/">Reports</a>
 
             {% if user.is_staff %}
+            <a href="/admin/maintenance/site/">Sites</a>
+            <a href="/admin/maintenance/maintenanceschedule/">Maintenance</a>
+            <a href="/admin/maintenance/maintenancehistory/">History</a>
             <a href="/admin/">Administration</a>
             {% endif %}
 
             <hr>
 
-            <form method="post"
-                  action="{% url 'logout' %}">
+            <form method="post" action="{% url 'logout' %}">
                 {% csrf_token %}
-                <button class="btn btn-outline-light">
-                    Logout
-                </button>
+                <button class="btn btn-outline-light">Logout</button>
             </form>
 
         </nav>
 
         <main class="col-md-10 p-4">
+            {% for m in messages %}
+            <div class="alert alert-success">{{ m }}</div>
+            {% endfor %}
 
             {% block content %}
             {% endblock %}

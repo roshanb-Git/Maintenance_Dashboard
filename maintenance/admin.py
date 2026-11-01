@@ -14,6 +14,7 @@ from .models import (
 class SiteAdmin(admin.ModelAdmin):
     list_display = ("code", "name", "location")
     search_fields = ("code", "name")
+    ordering = ("code",)   # A to Z by Equipment ID
 
 
 @admin.register(Equipment)
@@ -27,7 +28,8 @@ class EquipmentAdmin(admin.ModelAdmin):
     )
 
     list_filter = ("site", "equipment_type", "active")
-    search_fields = ("equipment_id", "name")
+    search_fields = ("equipment_id", "Make")
+    ordering = ("equipment_id",)   # A to Z by Equipment ID
 
 
 @admin.register(MaintenanceSchedule)

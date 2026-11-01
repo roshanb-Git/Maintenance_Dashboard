@@ -3,7 +3,7 @@
 
 {% block content %}
 
-<h2 class="mb-4">Maintenance Dashboard</h2>
+<h2 class="mb-4">Maintenance Dashboard - Power & AC</h2>
 
 <form method="get" class="mb-4">
 
@@ -11,7 +11,7 @@
             onchange="this.form.submit()">
 
         <option value="">All Sites</option>
-
+ 
         {% for site in sites %}
 
         <option value="{{ site.id }}"
@@ -66,6 +66,7 @@
     </div>
 
 </div>
+
 
 <div class="card p-3">
 
@@ -132,6 +133,14 @@
                         {% endif %}
 
                     </td>
+
+                    <td>
+                        <a class="btn btn-sm btn-primary"
+                           href="{% url 'complete_maintenance' item.id %}">
+                            Update
+                        </a>
+                    </td>
+
                 </tr>
 
                 {% empty %}

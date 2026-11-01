@@ -33,4 +33,5 @@ Python, Django, PostgreSQL, HTML, CSS, Bootstrap and JavaScript
 
 ## Dashboard Preview
 
-![Maintenance Dashboard](screenshots/dashboard.png)
+<img width="1865" height="851" alt="Screenshot 2026-11-02 002355" src="https://github.com/user-attachments/assets/9febacc9-4b4b-466a-8b3d-58b29fa794f4" />
+

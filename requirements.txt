@@ -1,4 +1,4 @@
-django
+﻿django
 psycopg[binary]
 python-dateutil
 reportlab

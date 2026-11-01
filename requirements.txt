@@ -7,7 +7,6 @@ Pillow
 celery
 redis
 python-dotenv
-
-gunicorn "psycopg[binary]"
+gunicorn 
 
 #pip freeze > requirements.txt

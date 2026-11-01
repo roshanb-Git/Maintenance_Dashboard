@@ -8,4 +8,6 @@ celery
 redis
 python-dotenv
 
+gunicorn "psycopg[binary]"
+
 #pip freeze > requirements.txt

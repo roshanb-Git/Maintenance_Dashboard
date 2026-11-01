@@ -4,9 +4,11 @@ from django.contrib.messages import constants as message_constants
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = "change-this-to-a-long-random-text"
-DEBUG = True
-ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
+# Reads from the server's .env file. On your PC, the defaults apply.
+SECRET_KEY = os.environ.get("SECRET_KEY", "dev-only-key-change-on-server")
+DEBUG = os.environ.get("DEBUG", "0") == "1" if os.environ.get("SECRET_KEY") else True
+ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "127.0.0.1, localhost").split(",")
+
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -47,14 +49,33 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "config.wsgi.application"
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+# PostgreSQL on the server (when DB_NAME is set), SQLite on your PC.
+if os.environ.get("DB_NAME"):
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.environ["DB_NAME"],
+            "USER": os.environ["DB_USER"],
+            "PASSWORD": os.environ["DB_PASSWORD"],
+            "HOST": os.environ.get("DB_HOST", "localhost"),
+            "PORT": "5432",
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
 
-AUTH_PASSWORD_VALIDATORS = []
+
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+]
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "Asia/Colombo"
@@ -62,6 +83,7 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 

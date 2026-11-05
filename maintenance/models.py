@@ -55,8 +55,16 @@ class Equipment(models.Model):
 
     active = models.BooleanField(default=True)
 
+    make = models.CharField(max_length=100, blank=True)
+    tank_capacity_litres = models.DecimalField(
+        max_digits=8, decimal_places=2, null=True, blank=True,
+        help_text="Generators only",
+    )
+
     def __str__(self):
         return self.equipment_id
+    
+    
 
 
 class MaintenanceSchedule(models.Model):
@@ -168,3 +176,35 @@ class MaintenanceAttachment(models.Model):
     uploaded_at = models.DateTimeField(
         auto_now_add=True
     )
+
+
+
+class DieselFilling(models.Model):
+
+    equipment = models.ForeignKey(
+        Equipment, on_delete=models.CASCADE, related_name="diesel_fills",
+        limit_choices_to={"equipment_type": "DEG"},
+    )
+    filled_date = models.DateField()
+    litres = models.DecimalField(
+        max_digits=8, decimal_places=2, validators=[MinValueValidator(0.01)]
+    )
+    running_hours = models.DecimalField(
+        max_digits=9, decimal_places=1, null=True, blank=True,
+        help_text="Generator hour meter reading (optional)",
+    )
+    remarks = models.TextField(blank=True)
+    recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-filled_date", "-id"]
+
+
+    tank_level_after = models.DecimalField(
+    max_digits=8, decimal_places=2, null=True, blank=True,
+    validators=[MinValueValidator(0)],
+    help_text="Litres in the tank after filling (from dipstick or gauge)",)
+
+    def __str__(self):
+        return f"{self.equipment} - {self.litres} L on {self.filled_date}"

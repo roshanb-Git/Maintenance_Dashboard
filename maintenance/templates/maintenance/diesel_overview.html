@@ -1,0 +1,142 @@
+{# diesel_overview.html - Diesel monitoring page: summary cards, per-site litres, and a table of generator fuel levels with an "Add filling" button. #}
+{% extends "base.html" %}
+{% block content %}
+
+<h3 class="mb-1">Diesel Monitoring</h3>
+<h6 class="text-muted mb-4">Generator fuel levels and consumption overview</h6>
+
+
+{# Site filter: reloads the page with ?site=<id> #}
+    <form method="get" class="mb-4">
+        <select name="site" class="form-select" onchange="this.form.submit()">
+            <option value="">Engineer Network</option>
+            {% for site in sites %}
+            <option value="{{ site.id }}"
+                    {% if selected_site == site.id|stringformat:"s" %}selected{% endif %}>
+                {{ site.name }}
+            </option>
+            {% endfor %}
+        </select>
+    </form>
+
+
+{# Summary cards: values come from the "stats" dictionary in the view #}
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card p-3">
+            <h6>Total Generators</h6>
+            <h2>{{ stats.total }}</h2>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card p-3">
+            <h6>Critical Fuel (&lt; 25%)</h6>
+            <h2 class="text-danger">{{ stats.critical }}</h2>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card p-3">
+            <h6>Low Fuel (&lt; 50%)</h6>
+            <h2 class="text-warning">{{ stats.low }}</h2>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card p-3">
+            <h6>Diesel Filled (30 Days)</h6>
+            <h2 class="text-success">{{ stats.litres_30|floatformat:0 }} L</h2>
+        </div>
+    </div>
+</div>
+
+
+
+{# Generator table: sorted by the view with the lowest fuel first #}
+<div class="card p-3 mb-4">
+    <h5>Generator Fuel Levels</h5>
+
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead>
+                <tr>
+                    <th>Generator</th>
+                    <th>Site</th>
+                    <th>Make</th>
+                    <th>Fuel Level</th>
+                    <th>Fuel Percentage</th>
+                    <th>Tank Capacity</th>
+                    <th>Last Filled</th>
+                    <th>Last 30 Days</th>
+                    <th></th>
+                </tr>
+            </thead>
+
+
+            <tbody>
+                {% for g in generators %}
+                <tr>
+                    <td>{{ g.equipment_id }}</td>
+                    <td>{{ g.site.name }}</td>
+                    <td>{{ g.make|default:"-" }}</td>
+
+                    {# Litres in the tank after the last filling #}
+                    <td>
+                        {% if g.last_level is not None %}{{ g.last_level|floatformat:0 }} L
+                        {% else %}-{% endif %}
+                    </td>
+
+                    {# Percentage bar coloured by level_status (critical / low / ok / unknown) #}
+                    <td style="min-width: 160px;">
+                        {% if g.pct is not None %}
+                        <div class="progress" style="height: 18px;">
+                            <div class="progress-bar
+                                {% if g.level_status == 'critical' %}bg-danger
+                                {% elif g.level_status == 'low' %}bg-warning text-dark
+                                {% else %}bg-success{% endif %}"
+                                 style="width: {{ g.pct }}%">
+                                {{ g.pct }}%
+                            </div>
+                        </div>
+                        {% else %}
+                        <span class="badge bg-secondary">No data</span>
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        {% if g.tank_capacity_litres %}{{ g.tank_capacity_litres|floatformat:0 }} L
+                        {% else %}-{% endif %}
+                    </td>
+
+                    {# Last filling date and how many days ago #}
+                    <td>
+                        {% if g.last_fill_date %}
+                            {{ g.last_fill_date|date:"d M Y" }}
+                            <br><small class="text-muted">{{ g.days_since }} day{{ g.days_since|pluralize }} ago</small>
+                        {% else %}-{% endif %}
+                    </td>
+
+                    <td>{{ g.litres_30|floatformat:0 }} L</td>
+
+                    {# Opens the add-filling form (only for users with permission) #}
+                    <td>
+                        {% if perms.maintenance.add_dieselfilling %}
+                        <a class="btn btn-sm btn-primary"
+                           href="{% url 'add_diesel' g.id %}">
+                            Add Filling
+                        </a>
+                        {% endif %}
+                    </td>
+                </tr>
+
+                {% empty %}
+                <tr>
+                    <td colspan="9">No generators found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        
+        </table>
+    </div>
+</div>
+
+
+{% endblock %}

@@ -7,6 +7,7 @@ from .models import (
     MaintenanceSchedule,
     MaintenanceHistory,
     MaintenanceAttachment,
+    DieselFilling,
 )
 
 
@@ -48,3 +49,8 @@ class ScheduleAdmin(admin.ModelAdmin):
 
 admin.site.register(MaintenanceHistory)
 admin.site.register(MaintenanceAttachment)
+
+@admin.register(DieselFilling)
+class DieselFillingAdmin(admin.ModelAdmin):
+    list_display = ("equipment", "filled_date", "litres", "running_hours", "recorded_by")
+    list_filter = ("equipment__site", "filled_date")

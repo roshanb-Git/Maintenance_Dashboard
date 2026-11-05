@@ -6,10 +6,11 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from .forms import MaintenanceUpdateForm
-from .models import Equipment, MaintenanceAttachment, MaintenanceSchedule
+from .forms import MaintenanceUpdateForm , DieselFillingForm
+from .models import Equipment, MaintenanceAttachment, MaintenanceSchedule, DieselFilling
 from .services import allowed_sites
 from django.http import FileResponse, Http404
+from django.db.models import OuterRef, Q, Subquery, Sum
 
 
 @login_required
@@ -112,9 +113,7 @@ def complete_maintenance(request, schedule_id):
         messages.success(request, "Maintenance record saved.")
         return redirect("dashboard")
 
-    return render(
-        request,
-        "maintenance/maintenance_form.html",
+    return render(request,"maintenance/maintenance_form.html",
         {"form": form, "schedule": schedule},
     )
 
@@ -142,3 +141,107 @@ def todo(request):
         next_due__lte=warning_date,
     ).select_related("equipment", "equipment__site").order_by("next_due")
     return render(request, "maintenance/todo.html", {"todo": items})
+
+
+
+@login_required
+def diesel(request):
+    sites = allowed_sites(request.user)
+    selected_site = request.GET.get("site", "")
+    today = timezone.localdate()
+    since = today - timedelta(days=30)
+
+    last = DieselFilling.objects.filter(
+        equipment=OuterRef("pk")
+    ).order_by("-filled_date", "-id")
+
+    qs = Equipment.objects.filter(
+        equipment_type="DEG", active=True, site__in=sites
+    ).select_related("site")
+
+    if selected_site.isdigit():
+        qs = qs.filter(site_id=selected_site)
+
+    qs = qs.annotate(
+        last_fill_date=Subquery(last.values("filled_date")[:1]),
+        last_fill_litres=Subquery(last.values("litres")[:1]),
+        last_level=Subquery(last.values("tank_level_after")[:1]),
+        litres_30=Sum("diesel_fills__litres",
+                      filter=Q(diesel_fills__filled_date__gte=since)),
+    )
+
+    generators = []
+    site_totals = {}
+    stats = {"total": 0, "critical": 0, "low": 0, "unknown": 0, "litres_30": 0}
+
+    for g in qs:
+        cap = g.tank_capacity_litres
+        if cap and g.last_level is not None:
+            g.pct = max(0, min(100, round(float(g.last_level) / float(cap) * 100)))
+            # thresholds: change 25 and 50 if you want different limits
+            g.level_status = ("critical" if g.pct < 25
+                              else "low" if g.pct < 50 else "ok")
+        else:
+            g.pct = None
+            g.level_status = "unknown"
+
+        g.litres_30 = g.litres_30 or 0
+        g.days_since = (today - g.last_fill_date).days if g.last_fill_date else None
+
+        stats["total"] += 1
+        stats["litres_30"] += g.litres_30
+        if g.level_status in stats:
+            stats[g.level_status] += 1
+
+        s = site_totals.setdefault(
+            g.site_id, {"name": g.site.name, "count": 0, "litres_30": 0})
+        s["count"] += 1
+        s["litres_30"] += g.litres_30
+
+        generators.append(g)
+
+    # lowest fuel first, generators with no data last
+    generators.sort(key=lambda x: (x.pct is None, x.pct or 0, x.site.name))
+
+    site_list = sorted(site_totals.values(), key=lambda x: -x["litres_30"])
+    top = site_list[0]["litres_30"] if site_list else 0
+    for s in site_list:
+        s["bar"] = round(s["litres_30"] / top * 100) if top else 0
+
+    return render(request, "maintenance/diesel_overview.html", {
+        "generators": generators,
+        "site_list": site_list,
+        "stats": stats,
+        "sites": sites,
+        "selected_site": selected_site,
+    })
+
+
+
+
+# Add-diesel page: form to record a new diesel filling for one generator (this was the missing view).
+@login_required
+@permission_required("maintenance.add_dieselfilling", raise_exception=True)
+def add_diesel(request, equipment_id):
+    equipment = get_object_or_404(
+        Equipment,
+        id=equipment_id,
+        equipment_type="DEG",
+        active=True,
+        site__in=allowed_sites(request.user),
+    )
+    form = DieselFillingForm(request.POST or None, equipment=equipment)
+
+    if request.method == "POST" and form.is_valid():
+        filling = form.save(commit=False)
+        filling.equipment = equipment
+        filling.filled_by = request.user   # delete this line if your model has no filled_by field
+        filling.save()
+        messages.success(request, f"Diesel filling saved for {equipment}.")
+        return redirect("diesel")
+
+    return render(
+        request,
+        "maintenance/diesel_form.html",
+        {"form": form, "equipment": equipment},
+    )

@@ -1,0 +1,15 @@
+{# diesel_form.html - Form page for entering a diesel filling for one generator. #}
+{% extends "base.html" %}
+{% block content %}
+<h2>Add diesel filling: {{ equipment.name }}</h2>
+<p>Site: {{ equipment.site.name }}
+   {% if equipment.tank_capacity_litres %}| Tank capacity: {{ equipment.tank_capacity_litres }} L{% endif %}
+</p>
+
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type="submit">Save filling</button>
+  <a href="{% url 'diesel' %}">Cancel</a>
+</form>
+{% endblock %}

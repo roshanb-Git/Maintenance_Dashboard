@@ -4,6 +4,7 @@ from django.conf import settings
 from django.utils import timezone
 from dateutil.relativedelta import relativedelta
 from django.core.validators import MinValueValidator
+from django.core.exceptions import ValidationError
 
 # Auto-generated service rules: equipment type -> (task type, interval in months)
 SERVICE_RULES = {
@@ -12,7 +13,7 @@ SERVICE_RULES = {
     "BAT": ("BAT", 4),   # Battery test every 4 months
 }
 
-
+#class for sites
 class Site(models.Model):
     name = models.CharField(max_length=150)
     code = models.CharField(max_length=30, unique=True)
@@ -28,6 +29,7 @@ class Site(models.Model):
         return self.name
 
 
+#class for equipment
 class Equipment(models.Model):
 
     TYPES = [
@@ -36,30 +38,56 @@ class Equipment(models.Model):
         ("BAT", "Battery Bank"),
     ]
 
-    equipment_id = models.CharField(
-        max_length=50,
-        unique=True
-    )
+    equipment_id = models.CharField( max_length=50, unique=True)
 
     name = models.CharField(max_length=150)
 
-    equipment_type = models.CharField(
-        max_length=10,
-        choices=TYPES
-    )
+    equipment_type = models.CharField(max_length=10, choices=TYPES)
 
-    site = models.ForeignKey(
-        Site,
-        on_delete=models.PROTECT
-    )
+    site = models.ForeignKey(Site, on_delete=models.PROTECT)
 
     active = models.BooleanField(default=True)
 
     make = models.CharField(max_length=100, blank=True)
+
+
+    # Generator-only fields (DEG)
     tank_capacity_litres = models.DecimalField(
-        max_digits=8, decimal_places=2, null=True, blank=True,
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
         help_text="Generators only",
     )
+
+    consumption_lph = models.DecimalField(
+        "Fuel consumption (L/hour)",
+        max_digits=6, decimal_places=2, null=True, blank=True,
+        help_text="Generators only. Litres burned per running hour.",
+    )
+
+    # Fields that only apply to generators
+    DEG_ONLY_FIELDS = ("tank_capacity_litres", "consumption_lph")
+
+    def clean(self):
+        if self.equipment_type == "DEG":
+             if self.tank_capacity_litres is None:
+                errors["tank_capacity_litres"] = (
+                "Tank capacity is required for generators.")
+                 
+             if self.consumption_lph is None:
+                errors["consumption_lph"] = (
+                "Fuel consumption is required for generators."
+            )
+             
+
+    def save(self, *args, **kwargs):
+        # Non-generators never keep generator-only values
+        if self.equipment_type != "DEG":
+            for field in self.DEG_ONLY_FIELDS:
+                setattr(self, field, None)
+        super().save(*args, **kwargs)
+    
 
     def __str__(self):
         return self.equipment_id
@@ -149,6 +177,9 @@ class MaintenanceHistory(models.Model):
 
     completed_date = models.DateField()
 
+    # Due date at the moment the work was completed (for the "Was due" column)
+    due_date = models.DateField(null=True, blank=True)
+
     technician = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT
@@ -159,6 +190,15 @@ class MaintenanceHistory(models.Model):
     created_at = models.DateTimeField(
         auto_now_add=True
     )
+
+    @property
+    def result(self):
+        if not self.due_date:
+            return "-"
+        return "On time" if self.completed_date <= self.due_date else "Late"
+
+
+
 
 
 class MaintenanceAttachment(models.Model):

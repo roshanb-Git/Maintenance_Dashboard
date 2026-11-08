@@ -2,6 +2,19 @@
 {% extends "base.html" %}
 {% block content %}
 
+<style>
+    .fuel-table-scroll {
+        max-height: 450px;  
+        overflow-y: auto;
+    }
+    .fuel-table-scroll thead th {
+        position: sticky;
+        top: 0;
+        background: #fff;
+        z-index: 1;
+    }
+</style>
+
 <h3 class="mb-1">Diesel Monitoring</h3>
 <h6 class="text-muted mb-4">Generator fuel levels and consumption overview</h6>
 
@@ -54,7 +67,7 @@
 <div class="card p-3 mb-4">
     <h5>Generator Fuel Levels</h5>
 
-    <div class="table-responsive">
+    <div class="table-responsive fuel-table-scroll">
         <table class="table table-hover align-middle">
             <thead>
                 <tr>

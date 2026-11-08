@@ -20,18 +20,23 @@ class SiteAdmin(admin.ModelAdmin):
 
 @admin.register(Equipment)
 class EquipmentAdmin(admin.ModelAdmin):
-    list_display = (
-        "equipment_id",
-        "name",
-        "equipment_type",
-        "site",
-        "active",
-    )
-
+    list_display = ("equipment_id","name","equipment_type","site","active",)
     list_filter = ("site", "equipment_type", "active")
+
+    BASE_FIELDS = ["equipment_id", "name", "equipment_type", "site", "make", "active"]
     search_fields = ("equipment_id", "Make")
     ordering = ("equipment_id",)   # A to Z by Equipment ID
+    def get_fields(self, request, obj=None):
+        # 1) type chosen on a submitted form, 2) saved record, 3) ?equipment_type=DEG in the URL
+        eq_type = (
+            request.POST.get("equipment_type")
+            or (obj.equipment_type if obj else request.GET.get("equipment_type"))
+        )
 
+        if eq_type == "DEG":
+            return self.BASE_FIELDS + list(Equipment.DEG_ONLY_FIELDS)  # generators: show them
+        return self.BASE_FIELDS 
+    
 
 @admin.register(MaintenanceSchedule)
 class ScheduleAdmin(admin.ModelAdmin):

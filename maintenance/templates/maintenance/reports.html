@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h3 class="mb-1">Maintenance History</h3>
+<p class="text-muted">Completed maintenance records, newest first.</p>
+
+<form method="get" class="card p-3 mb-4">
+  <div class="row g-2 align-items-end">
+
+    <div class="col-md-3">
+      <label class="form-label small mb-1">Site</label>
+      <select name="site" class="form-select">
+        <option value="">All sites</option>
+        {% for s in sites %}
+        <option value="{{ s.id }}"
+          {% if selected_site == s.id|stringformat:"s" %}selected{% endif %}>
+          {{ s.name }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="col-md-2">
+      <label class="form-label small mb-1">Task</label>
+      <select name="task" class="form-select">
+        <option value="">All tasks</option>
+        {% for code, label in task_choices %}
+        <option value="{{ code }}" {% if selected_task == code %}selected{% endif %}>
+          {{ label }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="col-md-2">
+      <label class="form-label small mb-1">Equipment ID</label>
+      <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="DEG-001">
+    </div>
+
+    <div class="col-md-2">
+      <label class="form-label small mb-1">From</label>
+      <input type="date" name="from" value="{{ date_from }}" class="form-control">
+    </div>
+
+    <div class="col-md-2">
+      <label class="form-label small mb-1">To</label>
+      <input type="date" name="to" value="{{ date_to }}" class="form-control">
+    </div>
+
+    <div class="col-md-1 d-grid">
+      <button class="btn btn-primary">Filter</button>
+    </div>
+
+  </div>
+  <div class="mt-2">
+    <a href="{% url 'reports' %}" class="small">Clear filters</a>
+  </div>
+</form>
+
+<div class="card p-3">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead>
+        <tr>
+          <th>Completed</th>
+          <th>Equipment</th>
+          <th>Site</th>
+          <th>Task</th>
+          <th>Was due</th>
+          <th>Result</th>
+          <th>Technician</th>
+          <th>Remarks</th>
+          <th>Files</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for h in page %}
+        <tr>
+          <td>{{ h.completed_date }}</td>
+          <td>
+            <a href="{% url 'equipment_detail' h.schedule.equipment.id %}">
+              {{ h.schedule.equipment.equipment_id }}
+            </a>
+          </td>
+          <td>{{ h.schedule.equipment.site.name }}</td>
+          <td>{{ h.schedule.get_task_type_display }}</td>
+          <td>{{ h.due_date|default:"-" }}</td>
+          <td>
+            {% if h.days_late is None %}
+              -
+            {% elif h.days_late <= 0 %}
+              <span class="badge bg-success">On time</span>
+            {% else %}
+              <span class="badge bg-danger">{{ h.days_late }} day{{ h.days_late|pluralize }} late</span>
+            {% endif %}
+          </td>
+          <td>{{ h.technician.get_username }}</td>
+          <td title="{{ h.remarks }}">{{ h.remarks|truncatechars:60|default:"-" }}</td>
+          <td>
+            {% for a in h.attachments.all %}
+              <a href="{% url 'download_attachment' a.id %}" target="_blank">File {{ forloop.counter }}</a>{% if not forloop.last %}, {% endif %}
+            {% empty %}-{% endfor %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="9">No maintenance records found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if page.has_other_pages %}
+  <nav class="d-flex justify-content-between align-items-center mt-2">
+    <span class="small text-muted">
+      Page {{ page.number }} of {{ page.paginator.num_pages }}
+      ({{ page.paginator.count }} records)
+    </span>
+    <div class="btn-group">
+      {% if page.has_previous %}
+      <a class="btn btn-sm btn-outline-primary"
+         href="?{% if qs %}{{ qs }}&{% endif %}page={{ page.previous_page_number }}">Previous</a>
+      {% endif %}
+      {% if page.has_next %}
+      <a class="btn btn-sm btn-outline-primary"
+         href="?{% if qs %}{{ qs }}&{% endif %}page={{ page.next_page_number }}">Next</a>
+      {% endif %}
+    </div>
+  </nav>
+  {% endif %}
+</div>
+
+{% endblock %}

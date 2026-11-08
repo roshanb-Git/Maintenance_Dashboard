@@ -1,16 +1,18 @@
 
-from datetime import timedelta
+from datetime import timedelta, date
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
+
 from .forms import MaintenanceUpdateForm , DieselFillingForm
 from .models import Equipment, MaintenanceAttachment, MaintenanceSchedule, DieselFilling
 from .services import allowed_sites
 from django.http import FileResponse, Http404
 from django.db.models import OuterRef, Q, Subquery, Sum
+from django.utils.dateparse import parse_date
 
 
 @login_required
@@ -98,6 +100,7 @@ def complete_maintenance(request, schedule_id):
             history = form.save(commit=False)
             history.schedule = schedule
             history.technician = request.user
+            history.due_date = schedule.next_due
             history.save()
 
             f = form.cleaned_data.get("attachment")
@@ -143,6 +146,55 @@ def todo(request):
     return render(request, "maintenance/todo.html", {"todo": items})
 
 
+@login_required
+def history(request):
+    qs = (maintenancehistory.objects
+        # Only records for sites this user is allowed to see
+        .filter(schedule__equipment__site__in=allowed_sites(request.user))
+        .select_related("schedule__equipment__site", "technician")
+        .prefetch_related("attachments")     # avoids one query per row for Files
+        .order_by("-completed_date", "-id")  # newest first
+    )
+ 
+    # Filter values from the form: ?site=&task=&equipment=&from=&to=
+    site = request.GET.get("site", "")
+    task = request.GET.get("task", "")
+    equipment = request.GET.get("equipment", "").strip()
+    date_from = parse_date(request.GET.get("from", "") or "")
+    date_to = parse_date(request.GET.get("to", "") or "")
+ 
+    if site.isdigit():
+        qs = qs.filter(schedule__equipment__site_id=site)
+    if task:
+        qs = qs.filter(schedule__task_type=task)
+    if equipment:
+        qs = qs.filter(schedule__equipment__equipment_id__icontains=equipment)
+    if date_from:
+        qs = qs.filter(completed_date__gte=date_from)
+    if date_to:
+        qs = qs.filter(completed_date__lte=date_to)
+ 
+    return render(request, "maintenance/history.html", {
+        "records": qs,
+        "sites": allowed_sites(request.user),
+        "tasks": MaintenanceSchedule.TASKS,
+        # Sent back so the filter form keeps the values the user typed
+        "selected": {
+            "site": site,
+            "task": task,
+            "equipment": equipment,
+            "from": request.GET.get("from", ""),
+            "to": request.GET.get("to", ""),
+        },
+    })
+
+
+
+# Reports page (static for now)
+@login_required
+def reports(request):
+    return render(request, "maintenance/reports.html")
+
 
 @login_required
 def diesel(request):
@@ -151,6 +203,7 @@ def diesel(request):
     today = timezone.localdate()
     since = today - timedelta(days=30)
 
+    # Latest filling per generator (newest date first, then newest id)
     last = DieselFilling.objects.filter(
         equipment=OuterRef("pk")
     ).order_by("-filled_date", "-id")
@@ -162,7 +215,10 @@ def diesel(request):
     if selected_site.isdigit():
         qs = qs.filter(site_id=selected_site)
 
+     # Attach latest-filling details and 30-day litres to each generator
     qs = qs.annotate(
+        last_fill_id=Subquery(last.values("id")[:1]),          
+        #NEW: sort tie-breaker
         last_fill_date=Subquery(last.values("filled_date")[:1]),
         last_fill_litres=Subquery(last.values("litres")[:1]),
         last_level=Subquery(last.values("tank_level_after")[:1]),
@@ -188,11 +244,13 @@ def diesel(request):
         g.litres_30 = g.litres_30 or 0
         g.days_since = (today - g.last_fill_date).days if g.last_fill_date else None
 
+        # Summary card totals
         stats["total"] += 1
         stats["litres_30"] += g.litres_30
         if g.level_status in stats:
             stats[g.level_status] += 1
 
+         # Per-site totals
         s = site_totals.setdefault(
             g.site_id, {"name": g.site.name, "count": 0, "litres_30": 0})
         s["count"] += 1
@@ -235,7 +293,7 @@ def add_diesel(request, equipment_id):
     if request.method == "POST" and form.is_valid():
         filling = form.save(commit=False)
         filling.equipment = equipment
-        filling.filled_by = request.user   # delete this line if your model has no filled_by field
+        filling.recorded_by = request.user   # delete this line if your model has no filled_by field
         filling.save()
         messages.success(request, f"Diesel filling saved for {equipment}.")
         return redirect("diesel")

@@ -33,5 +33,7 @@ Python, Django, PostgreSQL, HTML, CSS, Bootstrap and JavaScript
 
 ## Dashboard Preview
 
-<img width="1865" height="851" alt="Screenshot 2026-11-02 002355" src="https://github.com/user-attachments/assets/9febacc9-4b4b-466a-8b3d-58b29fa794f4" />
+<img width="1865" height="864" alt="Screenshot 2026-11-08 150954" src="https://github.com/user-attachments/assets/405c0f90-7106-46eb-88bc-e740805ae964" />
+<img width="1865" height="864" alt="image" src="https://github.com/user-attachments/assets/2341bb77-cf67-43f0-9e35-7b75cfa151c1" />
+
 

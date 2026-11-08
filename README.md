@@ -34,6 +34,8 @@ Python, Django, PostgreSQL, HTML, CSS, Bootstrap and JavaScript
 ## Dashboard Preview
 
 <img width="1865" height="864" alt="Screenshot 2026-11-08 150954" src="https://github.com/user-attachments/assets/405c0f90-7106-46eb-88bc-e740805ae964" />
+
+## Diesel of DEG
 <img width="1859" height="865" alt="Screenshot 2026-11-08 150942" src="https://github.com/user-attachments/assets/6594961e-cbed-42bf-8c4c-c8cbdc6c9bcd" />
 
 

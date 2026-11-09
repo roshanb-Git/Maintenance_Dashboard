@@ -68,18 +68,18 @@ class Equipment(models.Model):
 
     # Fields that only apply to generators
     DEG_ONLY_FIELDS = ("tank_capacity_litres", "consumption_lph")
-
+    
     def clean(self):
+        # Generators must have both values
         if self.equipment_type == "DEG":
-             if self.tank_capacity_litres is None:
-                errors["tank_capacity_litres"] = (
-                "Tank capacity is required for generators.")
-                 
-             if self.consumption_lph is None:
-                errors["consumption_lph"] = (
-                "Fuel consumption is required for generators."
-            )
-             
+            errors = {}
+            if not self.tank_capacity_litres:
+                errors["tank_capacity_litres"] = "Tank capacity is required for generators."
+            if not self.consumption_lph:
+                errors["consumption_lph"] = "Fuel consumption (L/hour) is required for generators."
+            if errors:
+                raise ValidationError(errors)
+            
 
     def save(self, *args, **kwargs):
         # Non-generators never keep generator-only values
@@ -248,3 +248,33 @@ class DieselFilling(models.Model):
 
     def __str__(self):
         return f"{self.equipment} - {self.litres} L on {self.filled_date}"
+    
+
+
+class DailyReading(models.Model):
+    """Daily hour-meter reading for a generator."""
+
+    equipment = models.ForeignKey(
+        Equipment, on_delete=models.CASCADE, related_name="readings",
+        limit_choices_to={"equipment_type": "DEG"},
+    )
+    reading_date = models.DateField()
+    running_hours = models.DecimalField(
+        max_digits=9, decimal_places=1,
+        validators=[MinValueValidator(0)],
+        help_text="Hour meter reading",
+    )
+    recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-reading_date", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["equipment", "reading_date"],
+                name="one_reading_per_day",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.equipment} - {self.running_hours} h on {self.reading_date}"

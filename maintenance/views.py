@@ -1,5 +1,7 @@
 
 from datetime import timedelta, date
+from decimal import Decimal
+from django import forms
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
 from django.db import transaction
@@ -14,6 +16,13 @@ from django.http import FileResponse, Http404
 from django.db.models import OuterRef, Q, Subquery, Sum
 from django.utils.dateparse import parse_date
 
+from decimal import Decimal, InvalidOperation
+from .fuel import estimate_fuel
+from .models import DailyReading, DieselFilling, Equipment, MaintenanceAttachment, MaintenanceHistory,MaintenanceSchedule
+
+
+
+# Dashboard
 
 @login_required
 def dashboard(request):
@@ -30,7 +39,6 @@ def dashboard(request):
         "equipment",
         "equipment__site"
     )
-
 
     site_id = request.GET.get("site" , "")
 
@@ -81,9 +89,13 @@ def dashboard(request):
         context
     )
 
+@login_required
+def dailyradings(request):
+    return render(request, "maintenance/dailyreadings.html")
 
 
-#This function powers the Update page.
+
+# Update page: complete a maintenance task
 
 @login_required
 @permission_required("maintenance.add_maintenancehistory", raise_exception=True)
@@ -120,6 +132,9 @@ def complete_maintenance(request, schedule_id):
         {"form": form, "schedule": schedule},
     )
 
+# ---------------------------------------------------------------------------
+# Simple list pages
+# ---------------------------------------------------------------------------
 
 @login_required
 def equipment_list(request):
@@ -145,10 +160,13 @@ def todo(request):
     ).select_related("equipment", "equipment__site").order_by("next_due")
     return render(request, "maintenance/todo.html", {"todo": items})
 
-
+ 
+# ---------------------------------------------------------------------------
+# History page
+# ---------------------------------------------------------------------------
 @login_required
 def history(request):
-    qs = (maintenancehistory.objects
+    qs = (MaintenanceHistory.objects
         # Only records for sites this user is allowed to see
         .filter(schedule__equipment__site__in=allowed_sites(request.user))
         .select_related("schedule__equipment__site", "technician")
@@ -196,6 +214,17 @@ def reports(request):
     return render(request, "maintenance/reports.html")
 
 
+# ---------------------------------------------------------------------------
+# Diesel monitoring dashboard
+#
+# Estimated tank level = level after the last filling
+#     - (hours run since that filling x the generator's consumption in L/h)
+#
+# Hours run = latest daily hour-meter reading - hour meter at the last filling.
+# If there is no consumption rate or no reading since the filling, the level
+# at the last filling is shown instead (g.estimated = False).
+# ---------------------------------------------------------------------------
+
 @login_required
 def diesel(request):
     sites = allowed_sites(request.user)
@@ -208,29 +237,88 @@ def diesel(request):
         equipment=OuterRef("pk")
     ).order_by("-filled_date", "-id")
 
-    qs = Equipment.objects.filter(
+    # Daily hour-meter readings per generator (newest first)
+    readings = DailyReading.objects.filter(
+        equipment=OuterRef("pk")
+    ).order_by("-reading_date", "-id")
+
+
+     # Base queryset: active generators the user is allowed to see
+    base_qs = Equipment.objects.filter(
         equipment_type="DEG", active=True, site__in=sites
     ).select_related("site")
-
+ 
     if selected_site.isdigit():
-        qs = qs.filter(site_id=selected_site)
+        base_qs = base_qs.filter(site_id=selected_site)
 
-     # Attach latest-filling details and 30-day litres to each generator
-    qs = qs.annotate(
-        last_fill_id=Subquery(last.values("id")[:1]),          
-        #NEW: sort tie-breaker
+
+    # Litres filled in the last 30 days, per generator, in one query
+    litres_by_gen = dict(
+        DieselFilling.objects
+        .filter(equipment__in=base_qs.values("pk"), filled_date__gte=since)
+        .order_by()                                  # clear Meta.ordering for the GROUP BY
+        .values_list("equipment")
+        .annotate(total=Sum("litres"))
+    )
+
+
+    # Step 1: latest filling details + latest daily reading
+    qs = base_qs.annotate(
+        last_fill_id=Subquery(last.values("id")[:1]),                    # sort tie-breaker
         last_fill_date=Subquery(last.values("filled_date")[:1]),
         last_fill_litres=Subquery(last.values("litres")[:1]),
         last_level=Subquery(last.values("tank_level_after")[:1]),
-        litres_30=Sum("diesel_fills__litres",
-                      filter=Q(diesel_fills__filled_date__gte=since)),
+        last_fill_hours=Subquery(last.values("running_hours")[:1]),      # meter at filling (optional)
+        latest_hours=Subquery(readings.values("running_hours")[:1]),
+        latest_reading_date=Subquery(readings.values("reading_date")[:1]),
+    )
+ 
+    # Step 2: meter value around the filling date, used when the filling
+    # form did not record running hours (needs last_fill_date from step 1)
+    qs = qs.annotate(
+        hours_before_fill=Subquery(
+            readings.filter(reading_date__lte=OuterRef("last_fill_date"))
+            .values("running_hours")[:1]
+        ),
+        hours_after_fill=Subquery(
+            readings.filter(reading_date__gte=OuterRef("last_fill_date"))
+            .order_by("reading_date", "id")
+            .values("running_hours")[:1]
+        ),
     )
 
     generators = []
     site_totals = {}
     stats = {"total": 0, "critical": 0, "low": 0, "unknown": 0, "litres_30": 0}
-
+ 
     for g in qs:
+        # ---- Estimate the current tank level from running hours ----
+        g.estimated = False
+        g.hours_used = None
+        g.last_reading_date = None
+ 
+        if (
+            g.last_level is not None
+            and g.consumption_lph
+            and g.last_fill_date
+            and g.latest_hours is not None
+            and g.latest_reading_date >= g.last_fill_date
+        ):
+            # Meter at filling time: the filling's own value, else the closest reading
+            start = g.last_fill_hours
+            if start is None:
+                start = g.hours_before_fill
+            if start is None:
+                start = g.hours_after_fill
+ 
+            if start is not None:
+                hours = max(Decimal("0"), g.latest_hours - start)
+                g.hours_used = hours
+                g.last_reading_date = g.latest_reading_date
+                g.last_level = max(Decimal("0"), g.last_level - hours * g.consumption_lph)
+                g.estimated = True
+ 
+        # ---- Fuel percentage and status ----
         cap = g.tank_capacity_litres
         if cap and g.last_level is not None:
             g.pct = max(0, min(100, round(float(g.last_level) / float(cap) * 100)))
@@ -240,32 +328,39 @@ def diesel(request):
         else:
             g.pct = None
             g.level_status = "unknown"
-
-        g.litres_30 = g.litres_30 or 0
+ 
+        g.litres_30 = litres_by_gen.get(g.id, 0)
         g.days_since = (today - g.last_fill_date).days if g.last_fill_date else None
-
+ 
         # Summary card totals
         stats["total"] += 1
         stats["litres_30"] += g.litres_30
         if g.level_status in stats:
             stats[g.level_status] += 1
-
-         # Per-site totals
+ 
+        # Per-site totals
         s = site_totals.setdefault(
             g.site_id, {"name": g.site.name, "count": 0, "litres_30": 0})
         s["count"] += 1
         s["litres_30"] += g.litres_30
-
+ 
         generators.append(g)
 
-    # lowest fuel first, generators with no data last
-    generators.sort(key=lambda x: (x.pct is None, x.pct or 0, x.site.name))
 
+    # Latest filling on the top row; generators never filled go to the bottom.
+    # For "lowest fuel first" instead, use:
+    #   generators.sort(key=lambda x: (x.pct is None, x.pct or 0, x.site.name))
+    generators.sort(
+        key=lambda x: (x.last_fill_date or date.min, x.last_fill_id or 0),
+        reverse=True,
+    )
+ 
+    # Sites ranked by litres, with a 0-100 bar width relative to the top site
     site_list = sorted(site_totals.values(), key=lambda x: -x["litres_30"])
     top = site_list[0]["litres_30"] if site_list else 0
     for s in site_list:
         s["bar"] = round(s["litres_30"] / top * 100) if top else 0
-
+ 
     return render(request, "maintenance/diesel_overview.html", {
         "generators": generators,
         "site_list": site_list,
@@ -273,6 +368,7 @@ def diesel(request):
         "sites": sites,
         "selected_site": selected_site,
     })
+
 
 
 
@@ -302,4 +398,53 @@ def add_diesel(request, equipment_id):
         request,
         "maintenance/diesel_form.html",
         {"form": form, "equipment": equipment},
+    )
+
+
+ 
+# ---------------------------------------------------------------------------
+# Daily hour-meter readings (the view urls.py was looking for)
+#
+# Field names (equipment, reading_date, running_hours) are taken from how the
+# diesel() view uses DailyReading. Adjust them if your model differs.
+# ---------------------------------------------------------------------------
+class DailyReadingForm(forms.ModelForm):
+    class Meta:
+        model = DailyReading
+        fields = ["equipment", "reading_date", "running_hours"]
+        widgets = {"reading_date": forms.DateInput(attrs={"type": "date"})}
+ 
+    def __init__(self, *args, sites=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Only offer generators this user is allowed to see
+        self.fields["equipment"].queryset = Equipment.objects.filter(
+            equipment_type="DEG", active=True, site__in=sites
+        )
+
+@login_required
+@permission_required("maintenance.add_dailyreading", raise_exception=True)
+def daily_readings(request):
+    sites = allowed_sites(request.user)
+    form = DailyReadingForm(request.POST or None, sites=sites)
+ 
+    if request.method == "POST" and form.is_valid():
+        reading = form.save(commit=False)
+        reading.recorded_by = request.user      # required field: set it before saving
+        reading.save()
+        messages.success(request, "Daily reading saved.")
+        return redirect("daily_readings")
+
+    # (the extra form.save() lines that were here are removed: they ran on every
+    #  page load, including GET requests where the form has no data)
+ 
+    recent = (
+        DailyReading.objects.filter(equipment__site__in=sites)
+        .select_related("equipment")
+        .order_by("-reading_date", "-id")[:50]
+    )
+ 
+    return render(
+        request,
+        "maintenance/daily_readings.html",
+        {"form": form, "readings": recent},
     )

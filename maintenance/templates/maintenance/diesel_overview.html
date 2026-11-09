@@ -89,7 +89,8 @@
                 <tr>
                     <td>{{ g.equipment_id }}</td>
                     <td>{{ g.site.name }}</td>
-                    <td>{{ g.make|default:"-" }}</td>
+                    <td>{{ g.make|default:"-" }}
+                    </td>
 
                     {# Litres in the tank after the last filling #}
                     <td>
@@ -134,7 +135,7 @@
                         {% if perms.maintenance.add_dieselfilling %}
                         <a class="btn btn-sm btn-primary"
                            href="{% url 'add_diesel' g.id %}">
-                            Add Filling
+                            Update
                         </a>
                         {% endif %}
                     </td>

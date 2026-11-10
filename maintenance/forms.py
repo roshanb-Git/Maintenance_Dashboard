@@ -2,7 +2,43 @@
 from django import forms
 from django.utils import timezone
 
-from .models import MaintenanceHistory, DieselFilling
+from .models import MaintenanceHistory, DieselFilling, DailyReading, Equipment
+
+
+YES_NO = [(True, "Yes"), (False, "No")]
+
+def to_bool(value):
+    return value in (True, "True", "true", "1")
+
+class DailyReadingForm(forms.ModelForm):
+    water_level_checked = forms.TypedChoiceField(
+        label="Water level checked", choices=YES_NO, coerce=to_bool, initial=False,
+        widget=forms.Select(attrs={"class": "form-select form-select-sm"}),
+    )
+    oil_level_checked = forms.TypedChoiceField(
+        label="Oil level checked", choices=YES_NO, coerce=to_bool, initial=False,
+        widget=forms.Select(attrs={"class": "form-select form-select-sm"}),
+    )
+
+    class Meta:
+        model = DailyReading
+        fields = ["reading_date", "equipment", "running_hours",
+                  "water_level_checked", "oil_level_checked",
+                  "battery_voltage", "remarks"]
+        widgets = {
+            "reading_date": forms.DateInput(attrs={"type": "date", "class": "form-control form-control-sm"}),
+            "equipment": forms.Select(attrs={"class": "form-select form-select-sm"}),
+            "running_hours": forms.NumberInput(attrs={"class": "form-control form-control-sm", "step": "0.1"}),
+            "battery_voltage": forms.NumberInput(attrs={"class": "form-control form-control-sm", "step": "0.1"}),
+            "remarks": forms.TextInput(attrs={"class": "form-control form-control-sm"}),
+        }
+
+    def __init__(self, *args, sites=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        qs = Equipment.objects.filter(equipment_type="DEG", active=True)
+        if sites is not None:
+            qs = qs.filter(site__in=sites)
+        self.fields["equipment"].queryset = qs
 
 
 

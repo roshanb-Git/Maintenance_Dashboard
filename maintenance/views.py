@@ -9,7 +9,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 
-from .forms import MaintenanceUpdateForm , DieselFillingForm
+from .forms import MaintenanceUpdateForm , DieselFillingForm, DailyReadingForm
 from .models import Equipment, MaintenanceAttachment, MaintenanceSchedule, DieselFilling
 from .services import allowed_sites
 from django.http import FileResponse, Http404
@@ -18,7 +18,7 @@ from django.utils.dateparse import parse_date
 
 from decimal import Decimal, InvalidOperation
 from .fuel import estimate_fuel
-from .models import DailyReading, DieselFilling, Equipment, MaintenanceAttachment, MaintenanceHistory,MaintenanceSchedule
+from .models import DailyReading, MaintenanceHistory
 
 
 
@@ -35,10 +35,7 @@ def dashboard(request):
     schedules = MaintenanceSchedule.objects.filter(
         equipment__active=True,
         equipment__site__in=sites,
-    ).select_related(
-        "equipment",
-        "equipment__site"
-    )
+    ).select_related("equipment","equipment__site")
 
     site_id = request.GET.get("site" , "")
 
@@ -90,9 +87,8 @@ def dashboard(request):
     )
 
 @login_required
-def dailyradings(request):
+def dailyreadings(request):
     return render(request, "maintenance/dailyreadings.html")
-
 
 
 # Update page: complete a maintenance task
@@ -221,6 +217,7 @@ def reports(request):
 #     - (hours run since that filling x the generator's consumption in L/h)
 #
 # Hours run = latest daily hour-meter reading - hour meter at the last filling.
+
 # If there is no consumption rate or no reading since the filling, the level
 # at the last filling is shown instead (g.estimated = False).
 # ---------------------------------------------------------------------------
@@ -408,18 +405,7 @@ def add_diesel(request, equipment_id):
 # Field names (equipment, reading_date, running_hours) are taken from how the
 # diesel() view uses DailyReading. Adjust them if your model differs.
 # ---------------------------------------------------------------------------
-class DailyReadingForm(forms.ModelForm):
-    class Meta:
-        model = DailyReading
-        fields = ["equipment", "reading_date", "running_hours"]
-        widgets = {"reading_date": forms.DateInput(attrs={"type": "date"})}
- 
-    def __init__(self, *args, sites=None, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Only offer generators this user is allowed to see
-        self.fields["equipment"].queryset = Equipment.objects.filter(
-            equipment_type="DEG", active=True, site__in=sites
-        )
+
 
 @login_required
 @permission_required("maintenance.add_dailyreading", raise_exception=True)

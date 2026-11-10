@@ -52,6 +52,10 @@ class Equipment(models.Model):
 
 
     # Generator-only fields (DEG)
+    
+    # Fields that only apply to generators
+    DEG_ONLY_FIELDS = ("tank_capacity_litres", "consumption_lph")
+    
     tank_capacity_litres = models.DecimalField(
         max_digits=8,
         decimal_places=2,
@@ -66,9 +70,6 @@ class Equipment(models.Model):
         help_text="Generators only. Litres burned per running hour.",
     )
 
-    # Fields that only apply to generators
-    DEG_ONLY_FIELDS = ("tank_capacity_litres", "consumption_lph")
-    
     def clean(self):
         # Generators must have both values
         if self.equipment_type == "DEG":
@@ -264,6 +265,15 @@ class DailyReading(models.Model):
         validators=[MinValueValidator(0)],
         help_text="Hour meter reading",
     )
+
+    water_level_checked = models.BooleanField(default=False)
+    oil_level_checked = models.BooleanField(default=False)
+    battery_voltage = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(0)],
+    )
+    remarks = models.TextField(blank=True)
+    
     recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     created_at = models.DateTimeField(auto_now_add=True)
 

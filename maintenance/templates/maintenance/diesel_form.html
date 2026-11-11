@@ -2,9 +2,21 @@
 {% extends "base.html" %}
 {% block content %}
 <h2>Update diesel tank: {{ equipment.site.name }}</h2>
-<p>DEG Make: {{ equipment.name }}
-   {% if equipment.tank_capacity_litres %}| Tank capacity: {{ equipment.tank_capacity_litres }} L{% endif %}
+
+<p>
+  Make: {{ equipment.name }}
+  {% if equipment.tank_capacity_litres %}| Tank capacity: {{ equipment.tank_capacity_litres }} L{% endif %}
+  {% if equipment.consumption_lph %}| Fuel consumption: {{ equipment.consumption_lph }} L/h{% endif %}
+  | Last running hours:
+  {% with last=equipment.readings.first %}
+    {% if last %}
+      <strong>{{ last.running_hours }} h</strong> ({{ last.reading_date }})
+    {% else %}
+      No readings yet
+    {% endif %}
+  {% endwith %}
 </p>
+
 
 <form method="post">
   {% csrf_token %}

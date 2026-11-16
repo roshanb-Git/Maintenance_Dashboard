@@ -146,3 +146,23 @@ class DieselFillingForm(forms.ModelForm):
                 )
 
         return cleaned
+
+
+
+class EquipmentForm(forms.ModelForm):
+    class Meta:
+        model = Equipment
+        fields = "__all__"   # replace with a list once I've seen your model
+
+    def __init__(self, *args, sites=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if sites is not None:
+            self.fields["site"].queryset = sites
+        # Bootstrap styling, same look as your other forms
+        for name, field in self.fields.items():
+            if isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs["class"] = "form-check-input"
+            elif isinstance(field.widget, forms.Select):
+                field.widget.attrs["class"] = "form-select"
+            else:
+                field.widget.attrs["class"] = "form-control"

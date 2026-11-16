@@ -9,11 +9,11 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 
-from .forms import MaintenanceUpdateForm , DieselFillingForm, DailyReadingForm
+from .forms import MaintenanceUpdateForm , DieselFillingForm, DailyReadingForm, EquipmentForm
 from .models import Equipment, MaintenanceAttachment, MaintenanceSchedule, DieselFilling
 from .services import allowed_sites
 from django.http import FileResponse, Http404
-from django.db.models import OuterRef, Q, Subquery, Sum
+from django.db.models import Count, OuterRef, Q, Subquery, Sum
 from django.utils.dateparse import parse_date
 
 from decimal import Decimal, InvalidOperation
@@ -134,10 +134,28 @@ def complete_maintenance(request, schedule_id):
 
 @login_required
 def equipment_list(request):
-    items = Equipment.objects.filter(
-        site__in=allowed_sites(request.user)
-    ).select_related("site")
-    return render(request, "maintenance/equipment.html", {"equipment": items})
+    sites = allowed_sites(request.user)
+    selected_site = request.GET.get("site", "")
+
+    items = Equipment.objects.filter(site__in=sites).select_related("site")
+
+    if selected_site.isdigit():
+        items = items.filter(site_id=selected_site)
+
+    counts = items.aggregate(
+        generators=Count("pk", filter=Q(equipment_type="DEG")),
+        aircons=Count("pk", filter=Q(equipment_type="AC")),
+        batteries=Count("pk", filter=Q(equipment_type="BAT")),
+        rectifiers=Count("pk", filter=Q(equipment_type="RECT")),
+        total=Count("pk"),
+    )
+
+    return render(request, "maintenance/equipment.html", {
+        "equipment": items.order_by("site__name", "equipment_id"),
+        "counts": counts,
+        "sites": sites,
+        "selected_site": selected_site,
+    })
 
 
 @login_required
@@ -434,3 +452,6 @@ def daily_readings(request):
         "maintenance/daily_readings.html",
         {"form": form, "readings": recent},
     )
+
+
+

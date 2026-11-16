@@ -1,0 +1,86 @@
+{% extends "base.html" %}  {# change to whatever dashboard.html uses #}
+{% block content %}
+
+<style>
+    .equ-table-scroll {
+        max-height: 450px;  
+        overflow-y: auto;
+    }
+    .equ-table-scroll thead th {
+        position: sticky;
+        top: 0;
+        background: #fff;
+        z-index: 1;
+    }
+</style>
+
+<h3 class="mb-1">Total Equipment</h3>
+<h6 class="text-muted mb-4">Equipment details - overview</h6>
+
+
+{# Site filter: reloads the page with ?site=<id> #}
+    <form method="get" class="mb-4">
+        <select name="site" class="form-select" onchange="this.form.submit()">
+            <option value="">Engineer Network</option>
+            {% for site in sites %}
+            <option value="{{ site.id }}"
+                    {% if selected_site == site.id|stringformat:"s" %}selected{% endif %}>
+                {{ site.name }}
+            </option>
+            {% endfor %}
+        </select>
+    </form>
+
+
+{# Summary cards: values come from the "stats" dictionary in the view #}
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card p-3">
+            <h6>Total Generators</h6>
+            <h2>{{ counts.generators }}</h2>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card p-3">
+            <h6>Total Airconditioners</h6>
+            <h2>{{ counts.aircons }}</h2>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card p-3">
+            <h6>Total Battery Banks</h6>
+            <h2>{{ counts.batteries }}</h2>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card p-3">
+            <h6>Total Rectifiers</h6>
+            <h2>{{ counts.rectifiers }}</h2>
+        </div>
+    </div>
+</div>
+
+
+
+<div class="table-responsive equ-table-scroll">
+  <table class="table table-hover align-middle">
+    <thead>
+      <tr><th>ID</th><th>Site</th><th>Type</th><th>Active</th></tr>
+    </thead>
+    <tbody>
+      {% for item in equipment %}
+      <tr>
+        <td>{{ item.equipment_id }}</td>
+        <td>{{ item.site }}</td>
+        <td>{{ item.get_equipment_type_display }}</td>
+        <td>{{ item.active|yesno:"Yes,No" }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="4">No equipment found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+
+{% endblock %}

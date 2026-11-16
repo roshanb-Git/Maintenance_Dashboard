@@ -36,6 +36,7 @@ class Equipment(models.Model):
         ("DEG", "Diesel Generator"),
         ("AC", "Air Conditioner"),
         ("BAT", "Battery Bank"),
+        ("REC", "Rectifier")
     ]
 
     equipment_id = models.CharField( max_length=50, unique=True)
